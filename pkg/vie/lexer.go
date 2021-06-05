@@ -56,6 +56,12 @@ func (lexer *Lexer) NextToken() Token {
 	lexer.skipWhitespace()
 
 	switch lexer.currentChar {
+	case '_':
+		t = singleCharToken(UNDERSCORE)
+	case '{':
+		t = singleCharToken(LBRACE)
+	case '}':
+		t = singleCharToken(RBRACE)
 	case '(':
 		t = singleCharToken(LPAREN)
 	case '.':
