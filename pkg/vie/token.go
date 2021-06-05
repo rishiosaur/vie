@@ -10,6 +10,7 @@ const (
 	// Operators
 
 	BANG        = "!"
+	UNDERSCORE  = "_"
 	AMPERSAND   = "&"
 	BAR         = "|"
 	PLUS        = "+"
@@ -64,9 +65,9 @@ type Token struct {
 }
 
 var keywords = map[string]TokenType{
-	"true":  TRUE,
-	"false": FALSE,
-
+	"true":   TRUE,
+	"false":  FALSE,
+	"return": RETURN,
 	"equals": EQ,
 	"not":    NOT_EQ,
 	"is":     DEFINE,
