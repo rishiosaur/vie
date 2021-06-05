@@ -3,6 +3,8 @@ package vie
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/kr/pretty"
 )
 
 type Parser struct {
@@ -86,6 +88,8 @@ func NewParser(lexer *Lexer) *Parser {
 	p.registerPrefixFunction(AMPERSAND, p.parseGenericPrefix)
 
 	p.registerPrefixFunction(LPAREN, p.parseParenthesisExpr)
+	p.registerPrefixFunction(LBRACKET, p.parseArray)
+	p.registerPrefixFunction(BAR, p.parseFunction)
 
 	p.registerInfixFunction(PLUS, p.parseGenericInfix)
 	p.registerInfixFunction(MINUS, p.parseGenericInfix)
@@ -100,6 +104,7 @@ func NewParser(lexer *Lexer) *Parser {
 	p.registerInfixFunction(EQ, p.parseGenericInfix)
 	p.registerInfixFunction(NOT_EQ, p.parseGenericInfix)
 	p.registerInfixFunction(PERIOD, p.parseGenericInfix)
+	p.registerInfixFunction(DOUBLECOLON, p.parseMatch)
 	return &p
 }
 
@@ -237,11 +242,42 @@ func (p *Parser) parseGenericPrefix() Expression {
 func (p *Parser) parseParenthesisExpr() Expression {
 	p.consumeToken()
 
+	pretty.Print(p.currentToken)
 	exp := p.parseExpression(LOWEST)
 	if !p.expectPeek(RPAREN) {
 		return nil
 	}
 	return exp
+}
+
+func (p *Parser) parseArray() Expression {
+	array := &ArrayLiteral{Token: p.currentToken}
+	array.Elements = p.parseExpressionList(RBRACKET)
+	return array
+}
+
+func (p *Parser) parseExpressionList(delimiter TokenType) []Expression {
+	exps := []Expression{}
+
+	if p.peekTokenIs(delimiter) {
+		p.consumeToken()
+		return exps
+	}
+
+	p.consumeToken()
+
+	exps = append(exps, p.parseExpression(LOWEST))
+	for p.peekTokenIs(COMMA) {
+		p.consumeToken()
+		p.consumeToken()
+		exps = append(exps, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(delimiter) {
+		return nil
+	}
+
+	return exps
 }
 
 func (p *Parser) parseBoolean() Expression {
@@ -263,7 +299,7 @@ func (p *Parser) parseString() Expression {
 }
 
 func (p *Parser) parseIdent() Expression {
-	return &Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+	return &Identifier{Token: p.currentToken, Value: []string{p.currentToken.Literal}}
 }
 
 func (p *Parser) parseGenericInfix(left Expression) Expression {
@@ -282,16 +318,173 @@ func (p *Parser) parseGenericInfix(left Expression) Expression {
 	return expression
 }
 
+func (p *Parser) parseMatch(left Expression) Expression {
+	println(left.String())
+	expression := &MatchExpression{
+		Token:      p.currentToken,
+		Expression: left,
+		blocks:     make(map[Expression]*BlockStatement),
+	}
+
+	if !p.expectPeek(LBRACE) {
+		return nil
+	}
+
+	p.consumeToken()
+
+	for {
+		matcher := p.parseExpression(LOWEST)
+
+		if !p.expectPeek(ARROW) {
+			return nil
+		}
+
+		token := p.currentToken
+
+		p.consumeToken()
+
+		println("\nawefawef")
+		pretty.Println(p.currentToken)
+		// pretty.Println(matcher)
+		println("\nawefawef")
+
+		switch p.currentToken.Type {
+		case LPAREN:
+			expr := p.parseExpression(LOWEST)
+			expression.blocks[matcher] = &BlockStatement{Token: token, Statements: []Statement{
+				&ReturnStatement{Token: p.currentToken, ReturnValue: expr},
+			}}
+		case LBRACE:
+			block := p.parseBlockStatement()
+			expression.blocks[matcher] = block
+			println("\nawefawef")
+			pretty.Println(p.currentToken)
+			// pretty.Println(matcher)
+			println("\nawefawef")
+
+		default:
+			expr := p.parseExpression(LOWEST)
+			expression.blocks[matcher] = &BlockStatement{Token: token, Statements: []Statement{
+				&ReturnStatement{Token: p.currentToken, ReturnValue: expr},
+			}}
+		}
+
+		if p.peekTokenIs(RBRACE) {
+			p.consumeToken()
+			break
+		} else {
+			p.consumeToken()
+		}
+
+	}
+
+	return expression
+}
+
+func (p *Parser) parseFunction() Expression {
+	f := &FunctionLiteral{Token: p.currentToken}
+	f.Parameters = p.parseFunctionParameters()
+	// fmt.Printf("%#v", f.Parameters)
+	f.Body = &BlockStatement{Token: p.currentToken, Statements: []Statement{}}
+	if !p.expectPeek(ARROW) {
+		return nil
+	}
+
+	switch p.peekToken.Type {
+	case LPAREN:
+
+		p.consumeToken()
+		p.consumeToken()
+		pretty.Print(p.currentToken)
+
+		expr := p.parseExpression(LOWEST)
+		f.Body.Statements = append(f.Body.Statements, &ReturnStatement{Token: p.currentToken, ReturnValue: expr})
+	case LBRACE:
+		p.consumeToken()
+		// pretty.Print(p.currentToken)
+		f.Body = p.parseBlockStatement()
+
+	default:
+		// p.consumeToken()
+		p.consumeToken()
+		println(p.currentToken.Literal)
+		expr := p.parseExpression(LOWEST)
+
+		f.Body.Statements = append(f.Body.Statements, &ReturnStatement{Token: p.currentToken, ReturnValue: expr})
+	}
+
+	return f
+}
+
+func (p *Parser) parseBlockStatement() *BlockStatement {
+	block := &BlockStatement{Token: p.currentToken}
+	block.Statements = []Statement{}
+
+	p.consumeToken()
+
+	for !p.currentTokenIs(RBRACE) && !p.currentTokenIs(EOF) {
+		stmt := p.parseStatement()
+
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+
+		p.consumeToken()
+	}
+
+	return block
+}
+
+func (p *Parser) parseFunctionParameters() []*Identifier {
+	idents := []*Identifier{}
+
+	if p.peekTokenIs(BAR) {
+		p.consumeToken()
+		return idents
+	}
+
+	p.consumeToken()
+
+	ident := &Identifier{Token: p.currentToken, Value: []string{p.currentToken.Literal}}
+	idents = append(idents, ident)
+
+	for p.peekTokenIs(COMMA) {
+		p.consumeToken()
+		p.consumeToken()
+		ident := &Identifier{Token: p.currentToken, Value: []string{p.currentToken.Literal}}
+		idents = append(idents, ident)
+
+	}
+
+	if !p.expectPeek(BAR) {
+		return nil
+	}
+
+	return idents
+}
+
 // Parsing statements
 
 func (p *Parser) parseStatement() Statement {
 	switch p.currentToken.Type {
 	case IDENT:
+		idents := []string{}
+		for {
+			idents = append(idents, p.currentToken.Literal)
+			if p.peekTokenIs(PERIOD) {
+				p.consumeToken()
+				if !p.expectPeek(IDENT) {
+					return nil
+				}
+			} else {
+				break
+			}
+		}
 		switch p.peekToken.Type {
 		case DEFINE:
-			return p.parseDefinition()
+			return p.parseDefinition(idents)
 		case UPDATE:
-			return p.parseUpdate()
+			return p.parseUpdate(idents)
 		default:
 			return p.parseExpressionStatement()
 		}
@@ -318,18 +511,22 @@ func (p *Parser) parseReturnStatement() *ReturnStatement {
 	stmt := &ReturnStatement{Token: p.currentToken}
 
 	p.consumeToken()
+	println("\n\n")
+	pretty.Print(p.currentToken)
 
 	stmt.ReturnValue = p.parseExpression(LOWEST)
+	println("\n\n")
+	pretty.Print(p.currentToken)
 
-	for !p.currentTokenIs(SEMICOLON) {
-		p.consumeToken()
-	}
+	// for !p.currentTokenIs(SEMICOLON) {
+	// 	p.consumeToken()
+	// }
 
 	return stmt
 }
 
-func (p *Parser) parseDefinition() *DefinitionStatement {
-	stmt := &DefinitionStatement{Name: &Identifier{Token: p.currentToken, Value: p.currentToken.Literal}}
+func (p *Parser) parseDefinition(values []string) *DefinitionStatement {
+	stmt := &DefinitionStatement{Name: &Identifier{Token: p.currentToken, Value: values}}
 	if !p.expectPeek(DEFINE) {
 		return nil
 	}
@@ -347,8 +544,8 @@ func (p *Parser) parseDefinition() *DefinitionStatement {
 
 }
 
-func (p *Parser) parseUpdate() *DefinitionStatement {
-	stmt := &DefinitionStatement{Name: &Identifier{Token: p.currentToken, Value: p.currentToken.Literal}}
+func (p *Parser) parseUpdate(values []string) *DefinitionStatement {
+	stmt := &DefinitionStatement{Name: &Identifier{Token: p.currentToken, Value: values}}
 	if !p.expectPeek(DEFINE) {
 		return nil
 	}
