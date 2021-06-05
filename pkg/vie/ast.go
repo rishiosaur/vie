@@ -80,12 +80,12 @@ func (ie *InfixExpression) String() string {
 
 type Identifier struct {
 	Token Token
-	Value string
+	Value []string
 }
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
-func (i *Identifier) String() string       { return i.Value }
+func (i *Identifier) String() string       { return i.Value[0] }
 
 type BooleanLiteral struct {
 	Token Token
@@ -148,10 +148,10 @@ func (fl *FunctionLiteral) String() string {
 		params = append(params, p.String())
 	}
 
-	out.WriteString(fl.TokenLiteral())
-	out.WriteString("(")
+	// out.WriteString(fl.TokenLiteral())
+	out.WriteString("|")
 	out.WriteString(strings.Join(params, ", "))
-	out.WriteString(") ")
+	out.WriteString("| ")
 	out.WriteString(fl.Body.String())
 
 	return out.String()
@@ -250,7 +250,7 @@ type MatchExpression struct {
 	blocks     map[Expression]*BlockStatement
 }
 
-func (bs *MatchExpression) statementNode()       {}
+func (bs *MatchExpression) expressionNode()      {}
 func (bs *MatchExpression) TokenLiteral() string { return bs.Token.Literal }
 func (bs *MatchExpression) String() string {
 	return "Match Expression!"
@@ -265,7 +265,7 @@ func (rs *ReturnStatement) statementNode()       {}
 func (rs *ReturnStatement) TokenLiteral() string { return rs.Token.Literal }
 func (rs *ReturnStatement) String() string {
 	var out bytes.Buffer
-	out.WriteString(rs.TokenLiteral() + " ")
+	// out.WriteString(rs.TokenLiteral() + " ")
 	if rs.ReturnValue != nil {
 		out.WriteString(rs.ReturnValue.String())
 	}
