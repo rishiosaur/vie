@@ -105,6 +105,8 @@ func NewParser(lexer *Lexer) *Parser {
 	p.registerInfixFunction(NOT_EQ, p.parseGenericInfix)
 	p.registerInfixFunction(PERIOD, p.parseGenericInfix)
 	p.registerInfixFunction(DOUBLECOLON, p.parseMatch)
+
+	p.registerInfixFunction(LPAREN, p.parseCall)
 	return &p
 }
 
@@ -461,6 +463,12 @@ func (p *Parser) parseFunctionParameters() []*Identifier {
 	}
 
 	return idents
+}
+
+func (p *Parser) parseCall(ident Expression) Expression {
+	exp := &CallExpression{Token: p.currentToken, Function: ident}
+	exp.Arguments = p.parseExpressionList(RPAREN)
+	return exp
 }
 
 // Parsing statements
