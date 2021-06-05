@@ -58,6 +58,8 @@ func (lexer *Lexer) NextToken() Token {
 	switch lexer.currentChar {
 	case '(':
 		t = singleCharToken(LPAREN)
+	case '.':
+		t = singleCharToken(PERIOD)
 	case ')':
 		t = singleCharToken(RPAREN)
 	case '[':
@@ -93,6 +95,13 @@ func (lexer *Lexer) NextToken() Token {
 		default:
 			t = singleCharToken(ASTERISK)
 		}
+	case '!':
+		switch lexer.peekCharacter() {
+		case '=':
+			t = doubleCharToken(NOT_EQ)
+		default:
+			t = singleCharToken(BANG)
+		}
 	case '/':
 		switch lexer.peekCharacter() {
 		case '=':
@@ -117,10 +126,13 @@ func (lexer *Lexer) NextToken() Token {
 	case ':':
 		switch lexer.peekCharacter() {
 		case ':':
-			t = doubleCharToken(MATCH)
+			t = doubleCharToken(DOUBLECOLON)
+		case '=':
+			t = doubleCharToken(DEFINE)
 		default:
 			t = singleCharToken(COLON)
 		}
+
 	case '&':
 		switch lexer.peekCharacter() {
 		case '&':
@@ -135,6 +147,24 @@ func (lexer *Lexer) NextToken() Token {
 		default:
 			t = singleCharToken(BAR)
 		}
+	case 0:
+		t.Literal = ""
+		t.Type = EOF
+	case '\'', '"', '`':
+
+		delimiter := lexer.currentChar
+		position := lexer.position + 1
+		for {
+			lexer.consumeChar()
+
+			if lexer.currentChar == delimiter || lexer.currentChar == 0 {
+				break
+			}
+		}
+
+		t.Type = STRING
+		t.Literal = lexer.input[position:lexer.position]
+
 	default:
 		if IsLetter(lexer.currentChar) {
 			t.Literal = lexer.consumeIdentifier()
