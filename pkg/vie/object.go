@@ -85,19 +85,58 @@ func NewLocalMachine(outer *Machine) *Machine {
 	return env
 }
 
-func (e *Machine) Get(name string) (Object, bool) {
+func (e *Machine) GetRaw(name string) (Object, bool) {
 	obj, ok := e.store[name]
 	if !ok && e.outer != nil {
-		obj, ok := e.outer.Get(name)
+		obj, ok := e.outer.GetRaw(name)
 		return obj, ok
 	}
 	return obj, ok
 }
 
-func (e *Machine) Set(name string, val Object) Object {
+func (e *Machine) Get(name *Identifier) (Object, bool) {
+	var obj Object
 
+	for _, n := range name.Value {
+		switch n := n.(type) {
+		case string:
+			o, ok := e.GetRaw(n)
+			if !ok {
+				return o, ok
+			}
+			obj = o
+
+		default:
+			return nil, false
+		}
+	}
+
+	return obj, true
+}
+
+func (e *Machine) SetRaw(name string, val Object) Object {
 	e.store[name] = val
 	return val
+}
+
+func (e *Machine) Set(name *Identifier, val Object) Object {
+
+	var obj Object
+	for _, n := range name.Value {
+		switch n := n.(type) {
+		case string:
+
+			_, ok := e.GetRaw(n)
+			if !ok {
+				println("hi")
+				return e.SetRaw(n, val)
+			}
+		default:
+			return val
+		}
+	}
+	// e.store[name] = val
+	return obj
 
 }
 
