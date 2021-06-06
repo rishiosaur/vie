@@ -75,10 +75,21 @@ func Eval(node Node, machine *Machine) Object {
 	case *BooleanLiteral:
 		return toBool(node.Value)
 	case *Identifier:
-		println("hawefwef")
+
 		if val, ok := machine.Get(node); ok {
 			return val
 		}
+	case *MapLiteral:
+		mv := make(map[Object]Object)
+
+		for k, v := range node.Pairs {
+			key := Eval(k, machine)
+			val := Eval(v, machine)
+
+			mv[key] = val
+		}
+
+		return &Map{Value: mv}
 
 		// if builtin, ok :=
 		// return newError("identifier not found: " + node.Value)
@@ -90,6 +101,7 @@ func Eval(node Node, machine *Machine) Object {
 		}
 		return evalPrefixExpression(node.Operator, right)
 	default:
+		pretty.Println(node)
 		return newError("I literally have no clue wtf that is. RTFM pls.")
 	}
 	return nil
