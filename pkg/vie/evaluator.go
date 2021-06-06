@@ -1,6 +1,10 @@
 package vie
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/kr/pretty"
+)
 
 func newError(format string, a ...interface{}) *Error {
 	return &Error{Message: fmt.Sprintf(format, a...)}
@@ -20,7 +24,16 @@ var (
 	NULL   = &Null{}
 )
 
+func toBool(input bool) *Boolean {
+	if input {
+		return OTRUE
+	}
+
+	return OFALSE
+}
+
 func Eval(node Node, machine *Machine) Object {
+
 	switch node := node.(type) {
 	case *Program:
 		return evalProgram(node, machine)
@@ -33,20 +46,49 @@ func Eval(node Node, machine *Machine) Object {
 			return val
 		}
 		return &ReturnValue{Value: val}
-	case *BlockStatement:
-		return evalBlockStatement(node, machine)
+
+	// case *BlockStatement:
+	// 	return evalBlockStatement(node, machine)
 	case *DefinitionStatement:
+		// println("hi")
 		val := Eval(node.Value, machine)
+		pretty.Println(val)
 		if isError(val) {
 			return val
 		}
-		machine.Set(node.Name.Value, val)
-	case *UpdateStatement:
-		val := Eval(node.Value, machine)
-		if isError(val) {
+		machine.Set(node.Name, val)
+	// case *UpdateStatement:
+	// 	val := Eval(node.Value, machine)
+	// 	if isError(val) {
+	// 		return val
+	// 	}
+	// 	machine.Update(node.Name.Value), val)
+
+	case *FunctionLiteral:
+		params := node.Parameters
+		body := node.Body
+		return &Function{Parameters: params, Machine: machine, Body: body}
+	case *IntegerLiteral:
+		return &Integer{Value: node.Value}
+	case *StringLiteral:
+		return &String{Value: node.Value}
+	case *BooleanLiteral:
+		return toBool(node.Value)
+	case *Identifier:
+		println("hawefwef")
+		if val, ok := machine.Get(node); ok {
 			return val
 		}
-		machine.Update(node.Name.Value, val)
+
+		// if builtin, ok :=
+		// return newError("identifier not found: " + node.Value)
+
+	case *PrefixExpression:
+		right := Eval(node.Right, machine)
+		if isError(right) {
+			return right
+		}
+		return evalPrefixExpression(node.Operator, right)
 	default:
 		return newError("I literally have no clue wtf that is. RTFM pls.")
 	}
@@ -67,4 +109,40 @@ func evalProgram(program *Program, machine *Machine) Object {
 	}
 
 	return result
+}
+
+func evalPrefixExpression(operator string, right Object) Object {
+	switch operator {
+	case "!":
+		return evalNegationOpExpression(right)
+	case "-":
+		return evalMinusOpExpression(right)
+	default:
+		return newError("unknown operator: %s%s", operator, right.Type())
+	}
+}
+
+func evalNegationOpExpression(right Object) Object {
+
+	switch right {
+	case OTRUE:
+		return OFALSE
+	case OFALSE:
+		return OTRUE
+	case NULL:
+		return OTRUE
+	default:
+		return OFALSE
+	}
+}
+
+func evalMinusOpExpression(right Object) Object {
+
+	if right.Type() != INTEGER_OBJ {
+		return newError("unknown operator: -%s", right.Type())
+	}
+
+	value := right.(*Integer).Value
+
+	return &Integer{Value: -value}
 }
