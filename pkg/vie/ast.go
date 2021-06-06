@@ -80,12 +80,12 @@ func (ie *InfixExpression) String() string {
 
 type Identifier struct {
 	Token Token
-	Value []string
+	Value []interface{}
 }
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
-func (i *Identifier) String() string       { return i.Value[0] }
+func (i *Identifier) String() string       { return "IDENT" }
 
 type BooleanLiteral struct {
 	Token Token

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/kr/pretty"
+	"github.com/niemeyer/pretty"
 )
 
 type Parser struct {
@@ -103,7 +103,7 @@ func NewParser(lexer *Lexer) *Parser {
 	p.registerInfixFunction(OR, p.parseGenericInfix)
 	p.registerInfixFunction(EQ, p.parseGenericInfix)
 	p.registerInfixFunction(NOT_EQ, p.parseGenericInfix)
-	p.registerInfixFunction(PERIOD, p.parseGenericInfix)
+	p.registerInfixFunction(PERIOD, p.parseAccess)
 	p.registerInfixFunction(DOUBLECOLON, p.parseMatch)
 
 	p.registerInfixFunction(LPAREN, p.parseCall)
@@ -207,14 +207,13 @@ func (p *Parser) parseExpression(precedence int) Expression {
 	prefix := p.prefixParsers[p.currentToken.Type]
 
 	if prefix == nil {
+
 		// p.noPrefixParseFnError(p.currentToken.Type)
 		return nil
 	}
 
 	left := prefix()
 
-	// fmt.Println("ipoj")
-	// fmt.Println(p.peekPrecedence())
 	for !p.peekTokenIs(SEMICOLON) && precedence < p.peekPrecedence() {
 		infix := p.infixParsers[p.peekToken.Type]
 		if infix == nil {
@@ -228,6 +227,64 @@ func (p *Parser) parseExpression(precedence int) Expression {
 
 	return left
 
+}
+
+// func
+
+// func flattenPairs(pairs []interface{}) []interface{} {
+// 	var p []interface{}
+// 	p = append(p, pairs[0])
+
+// }
+
+func (p *Parser) parseAccess(left Expression) Expression {
+
+	switch l := left.(type) {
+	case *Identifier:
+		expr := &Identifier{Token: l.Token, Value: l.Value}
+
+		for {
+			p.consumeToken()
+
+			var e Expression
+			switch p.currentToken.Type {
+			case LPAREN:
+				e = p.parseParenthesisExpr()
+			default:
+				e = p.parseExpression(LOWEST)
+			}
+			pretty.Println(e)
+
+			switch e := e.(type) {
+			case *Identifier:
+				expr.Value = append(expr.Value, e.Value...)
+			case *FloatLiteral:
+				expr.Value = append(expr.Value, e.Value)
+			case *IntegerLiteral:
+				expr.Value = append(expr.Value, e.Value)
+			case *StringLiteral:
+				expr.Value = append(expr.Value, e.Value)
+			default:
+				expr.Value = append(expr.Value, e)
+
+			}
+
+			if p.peekTokenIs(PERIOD) {
+				p.consumeToken()
+			} else if p.currentTokenIs(PERIOD) {
+				continue
+			} else {
+				break
+			}
+		}
+
+		// pretty.Println(p.peekToken)
+
+		return expr
+
+	default:
+		return nil
+	}
 }
 
 func (p *Parser) parseGenericPrefix() Expression {
@@ -244,11 +301,13 @@ func (p *Parser) parseGenericPrefix() Expression {
 func (p *Parser) parseParenthesisExpr() Expression {
 	p.consumeToken()
 
-	pretty.Print(p.currentToken)
 	exp := p.parseExpression(LOWEST)
 	if !p.expectPeek(RPAREN) {
 		return nil
 	}
+
+	pretty.Print(exp)
+
 	return exp
 }
 
@@ -301,7 +360,9 @@ func (p *Parser) parseString() Expression {
 }
 
 func (p *Parser) parseIdent() Expression {
-	return &Identifier{Token: p.currentToken, Value: []string{p.currentToken.Literal}}
+	var value []interface{}
+	value = append(value, p.currentToken.Literal)
+	return &Identifier{Token: p.currentToken, Value: value}
 }
 
 func (p *Parser) parseGenericInfix(left Expression) Expression {
@@ -321,7 +382,7 @@ func (p *Parser) parseGenericInfix(left Expression) Expression {
 }
 
 func (p *Parser) parseMatch(left Expression) Expression {
-	println(left.String())
+
 	expression := &MatchExpression{
 		Token:      p.currentToken,
 		Expression: left,
@@ -345,11 +406,6 @@ func (p *Parser) parseMatch(left Expression) Expression {
 
 		p.consumeToken()
 
-		println("\nawefawef")
-		pretty.Println(p.currentToken)
-		// pretty.Println(matcher)
-		println("\nawefawef")
-
 		switch p.currentToken.Type {
 		case LPAREN:
 			expr := p.parseExpression(LOWEST)
@@ -359,10 +415,6 @@ func (p *Parser) parseMatch(left Expression) Expression {
 		case LBRACE:
 			block := p.parseBlockStatement()
 			expression.blocks[matcher] = block
-			println("\nawefawef")
-			pretty.Println(p.currentToken)
-			// pretty.Println(matcher)
-			println("\nawefawef")
 
 		default:
 			expr := p.parseExpression(LOWEST)
@@ -386,7 +438,7 @@ func (p *Parser) parseMatch(left Expression) Expression {
 func (p *Parser) parseFunction() Expression {
 	f := &FunctionLiteral{Token: p.currentToken}
 	f.Parameters = p.parseFunctionParameters()
-	// fmt.Printf("%#v", f.Parameters)
+
 	f.Body = &BlockStatement{Token: p.currentToken, Statements: []Statement{}}
 	if !p.expectPeek(ARROW) {
 		return nil
@@ -397,19 +449,16 @@ func (p *Parser) parseFunction() Expression {
 
 		p.consumeToken()
 		p.consumeToken()
-		pretty.Print(p.currentToken)
 
 		expr := p.parseExpression(LOWEST)
 		f.Body.Statements = append(f.Body.Statements, &ReturnStatement{Token: p.currentToken, ReturnValue: expr})
 	case LBRACE:
 		p.consumeToken()
-		// pretty.Print(p.currentToken)
 		f.Body = p.parseBlockStatement()
 
 	default:
 		// p.consumeToken()
 		p.consumeToken()
-		println(p.currentToken.Literal)
 		expr := p.parseExpression(LOWEST)
 
 		f.Body.Statements = append(f.Body.Statements, &ReturnStatement{Token: p.currentToken, ReturnValue: expr})
@@ -447,13 +496,17 @@ func (p *Parser) parseFunctionParameters() []*Identifier {
 
 	p.consumeToken()
 
-	ident := &Identifier{Token: p.currentToken, Value: []string{p.currentToken.Literal}}
+	var value []interface{}
+	value = append(value, p.currentToken.Literal)
+	ident := &Identifier{Token: p.currentToken, Value: value}
 	idents = append(idents, ident)
 
 	for p.peekTokenIs(COMMA) {
 		p.consumeToken()
 		p.consumeToken()
-		ident := &Identifier{Token: p.currentToken, Value: []string{p.currentToken.Literal}}
+		var value []interface{}
+		value = append(value, p.currentToken.Literal)
+		ident := &Identifier{Token: p.currentToken, Value: value}
 		idents = append(idents, ident)
 
 	}
@@ -476,17 +529,14 @@ func (p *Parser) parseCall(ident Expression) Expression {
 func (p *Parser) parseStatement() Statement {
 	switch p.currentToken.Type {
 	case IDENT:
-		idents := []string{}
-		for {
-			idents = append(idents, p.currentToken.Literal)
-			if p.peekTokenIs(PERIOD) {
-				p.consumeToken()
-				if !p.expectPeek(IDENT) {
-					return nil
-				}
-			} else {
-				break
-			}
+		expr := p.parseExpression(LOWEST)
+		var idents []interface{}
+		switch e := expr.(type) {
+		case *Identifier:
+			idents = e.Value
+		default:
+			return nil
+
 		}
 		switch p.peekToken.Type {
 		case DEFINE:
@@ -519,21 +569,12 @@ func (p *Parser) parseReturnStatement() *ReturnStatement {
 	stmt := &ReturnStatement{Token: p.currentToken}
 
 	p.consumeToken()
-	println("\n\n")
-	pretty.Print(p.currentToken)
-
 	stmt.ReturnValue = p.parseExpression(LOWEST)
-	println("\n\n")
-	pretty.Print(p.currentToken)
-
-	// for !p.currentTokenIs(SEMICOLON) {
-	// 	p.consumeToken()
-	// }
 
 	return stmt
 }
 
-func (p *Parser) parseDefinition(values []string) *DefinitionStatement {
+func (p *Parser) parseDefinition(values []interface{}) *DefinitionStatement {
 	stmt := &DefinitionStatement{Name: &Identifier{Token: p.currentToken, Value: values}}
 	if !p.expectPeek(DEFINE) {
 		return nil
@@ -552,7 +593,7 @@ func (p *Parser) parseDefinition(values []string) *DefinitionStatement {
 
 }
 
-func (p *Parser) parseUpdate(values []string) *DefinitionStatement {
+func (p *Parser) parseUpdate(values []interface{}) *DefinitionStatement {
 	stmt := &DefinitionStatement{Name: &Identifier{Token: p.currentToken, Value: values}}
 	if !p.expectPeek(DEFINE) {
 		return nil
