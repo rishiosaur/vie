@@ -3,8 +3,9 @@ package vie
 import (
 	"bytes"
 	"fmt"
-	"hash/fnv"
 	"strings"
+
+	"github.com/kr/pretty"
 )
 
 type ObjectType string
@@ -97,14 +98,27 @@ func (e *Machine) GetRaw(name string) (Object, bool) {
 func (e *Machine) Get(name *Identifier) (Object, bool) {
 	var obj Object
 
-	for _, n := range name.Value {
+	switch n := name.Value[0].(type) {
+	case string:
+		o, ok := e.GetRaw(n)
+		if !ok {
+			return o, ok
+		}
+		println("awefewf")
+		pretty.Println(o)
+		println("awefewf")
+		obj = o
+	default:
+		return nil, false
+	}
+
+	for _, n := range name.Value[1:] {
 		switch n := n.(type) {
 		case string:
-			o, ok := e.GetRaw(n)
-			if !ok {
-				return o, ok
+			switch oo := obj.(type) {
+			case *Map:
+				obj = oo.Value[&String{Value: n}]
 			}
-			obj = o
 
 		default:
 			return nil, false
@@ -202,56 +216,73 @@ func (a *Array) Inspect() string {
 	return out.String()
 }
 
-type MapKey struct {
-	Type  ObjectType
-	Value uint
-}
+// type MapKey struct {
+// 	Type  ObjectType
+// 	Value uint
+// }
 
-type Mappable interface {
-	MapKey() MapKey
-}
+// type Mappable interface {
+// 	MapKey() MapKey
+// }
 
-func (b *Boolean) MapKey() MapKey {
-	var value uint
+// func (b *Boolean) MapKey() MapKey {
+// 	var value uint
 
-	if b.Value {
-		value = 1
-	} else {
-		value = 0
-	}
+// 	if b.Value {
+// 		value = 1
+// 	} else {
+// 		value = 0
+// 	}
 
-	return MapKey{Type: b.Type(), Value: value}
-}
+// 	return MapKey{Type: b.Type(), Value: value}
+// }
 
-func (i *Integer) MapKey() MapKey {
-	return MapKey{Type: i.Type(), Value: uint(i.Value)}
-}
+// func (i *Integer) MapKey() MapKey {
+// 	return MapKey{Type: i.Type(), Value: uint(i.Value)}
+// }
 
-func (s *String) MapKey() MapKey {
-	h := fnv.New64a()
-	_, ok := h.Write([]byte(s.Value))
-	if ok != nil {
-		panic("could not hash string `" + s.Value + "`")
-	}
-	return MapKey{Type: s.Type(), Value: uint(h.Sum64())}
-}
+// func (s *String) MapKey() MapKey {
+// 	h := fnv.New64a()
+// 	_, ok := h.Write([]byte(s.Value))
+// 	if ok != nil {
+// 		panic("could not hash string `" + s.Value + "`")
+// 	}
+// 	return MapKey{Type: s.Type(), Value: uint(h.Sum64())}
+// }
 
-type MapPair struct {
-	Key   Object
-	Value Object
-}
+// type MapPair struct {
+// 	Key   Object
+// 	Value Object
+// }
+
+// type Map struct {
+// 	Pairs map[MapKey]MapPair
+// }
+
+// func (h *Map) Type() ObjectType { return MAP_OBJ }
+
+// func (h *Map) Inspect() string {
+// 	var out bytes.Buffer
+// 	pairs := []string{}
+// 	for _, pair := range h.Pairs {
+// 		pairs = append(pairs, fmt.Sprintf("%s: %s", pair.Key.Inspect(), pair.Value.Inspect()))
+// 	}
+// 	out.WriteString("{")
+// 	out.WriteString(strings.Join(pairs, ", "))
+// 	out.WriteString("}")
+// 	return out.String()
+// }
 
 type Map struct {
-	Pairs map[MapKey]MapPair
+	Value map[Object]Object
 }
 
 func (h *Map) Type() ObjectType { return MAP_OBJ }
-
 func (h *Map) Inspect() string {
 	var out bytes.Buffer
 	pairs := []string{}
-	for _, pair := range h.Pairs {
-		pairs = append(pairs, fmt.Sprintf("%s: %s", pair.Key.Inspect(), pair.Value.Inspect()))
+	for k, v := range h.Value {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", k.Inspect(), v.Inspect()))
 	}
 	out.WriteString("{")
 	out.WriteString(strings.Join(pairs, ", "))
