@@ -90,6 +90,7 @@ func NewParser(lexer *Lexer) *Parser {
 	p.registerPrefixFunction(LPAREN, p.parseParenthesisExpr)
 	p.registerPrefixFunction(LBRACKET, p.parseArray)
 	p.registerPrefixFunction(BAR, p.parseFunction)
+	p.registerPrefixFunction(LBRACE, p.parseMap)
 
 	p.registerInfixFunction(PLUS, p.parseGenericInfix)
 	p.registerInfixFunction(MINUS, p.parseGenericInfix)
@@ -236,6 +237,38 @@ func (p *Parser) parseExpression(precedence int) Expression {
 // 	p = append(p, pairs[0])
 
 // }
+
+func (p *Parser) parseMap() Expression {
+	mapLit := &MapLiteral{Token: p.currentToken}
+	mapLit.Pairs = make(map[Expression]Expression)
+
+	for !p.peekTokenIs(RBRACE) {
+		p.consumeToken()
+		key := p.parseExpression(LOWEST)
+
+		if !p.expectPeek(COLON) {
+			return nil
+		}
+
+		p.consumeToken()
+
+		value := p.parseExpression(LOWEST)
+
+		mapLit.Pairs[key] = value
+
+		if !p.peekTokenIs(RBRACE) && !p.expectPeek(COMMA) {
+			return nil
+		}
+
+	}
+
+	if !p.expectPeek(RBRACE) {
+		return nil
+	}
+
+	return mapLit
+
+}
 
 func (p *Parser) parseAccess(left Expression) Expression {
 
